@@ -14,11 +14,13 @@ from typing import Sequence
 __version__ = "0.1.0"
 
 
-def cli() -> NoReturn:
-    raise SystemExit(main())
+def cli(args: Sequence[str] | None = None) -> NoReturn:
+    """The main command-line entrypoint for this script"""
+    raise SystemExit(main(args))
 
 
 def main(args: Sequence[str] | None = None) -> int | str:
+    """Parse arguments and invoke the handler."""
     parser = create_parser()
     ns = parser.parse_args(args)
     debug: bool = ns.debug
@@ -33,6 +35,8 @@ def main(args: Sequence[str] | None = None) -> int | str:
 
 
 class DefType(Enum):
+    """Enum of the different API definition variants."""
+
     PUBLIC = "public"
     PRIVATE = "private"
     ALL = "all"
@@ -41,6 +45,7 @@ class DefType(Enum):
 def create_parser(
     parser: argparse.ArgumentParser | None = None,
 ) -> argparse.ArgumentParser:
+    """Create or extend a command-line parser for this module."""
     parser = parser or argparse.ArgumentParser()
     parser.add_argument("-v", "--version", action="version", version=__version__)
     parser.add_argument(
@@ -100,18 +105,23 @@ def create_parser(
 
 
 def handler(ns: argparse.Namespace) -> int:
+    """Extract API definitions based on parsed command-line arguments."""
     files: list[str] = ns.files
     def_type: DefType = ns.def_type
     docstrings: bool = ns.docstrings
 
+    out_apis: list[str] = []
     for filename in files:
         entries = [f"# {filename}"]
         with open(filename) as f:
             source_s = f.read()
             api = module_api(source_s, def_type=def_type, include_docstring=docstrings)
             entries.extend(api)
-        out_s = "\n\n".join(entries)
-        print(out_s)
+        api_s = "\n\n".join(entries)
+        out_apis.append(api_s)
+
+    out_s = "\n\n".join(out_apis)
+    print(out_s)
 
     return 0
 
@@ -122,6 +132,7 @@ def module_api(
     def_type: DefType = DefType.PUBLIC,
     include_docstring: bool = True,
 ) -> list[str]:
+    """Extract API definition strings from a source code string."""
     def_it = find_definitions(source_s, include_docstring=include_docstring)
     def_lst = [unparse_tokens(d) for d in filter_definitions(def_it, def_type=def_type)]
     return [d.strip() for d in def_lst]
@@ -132,6 +143,7 @@ def find_definitions(
     *,
     include_docstring: bool = True,
 ) -> Iterator[list[TokenInfo]]:
+    """Find all tokens pertaining to function or class definitions in a module."""
     f = io.StringIO(source_s)
     gen = generate_tokens(f.readline)
     for tok in gen:
@@ -147,6 +159,7 @@ def _read_function(
     *,
     include_docstring: bool = True,
 ) -> list[TokenInfo]:
+    """Find tokens involved in a function definition."""
     return _read_signature(gen, tok, include_docstring=include_docstring)
 
 
@@ -156,6 +169,7 @@ def _read_class(
     *,
     include_docstring: bool = True,
 ) -> list[TokenInfo]:
+    """Find tokens involved in a class definition."""
     return _read_signature(gen, tok, include_docstring=include_docstring)
 
 
@@ -165,6 +179,7 @@ def _read_signature(
     *,
     include_docstring: bool = True,
 ) -> list[TokenInfo]:
+    """Find all tokens inolved in a signature definition."""
     # read until next colon outside parentheses
     signature: list[TokenInfo] = []
     parens = 0
@@ -175,9 +190,6 @@ def _read_signature(
         elif tok.exact_type == token.RPAR:
             parens -= 1
         tok = next(gen)
-
-    # # add the colon
-    # signature.append(tok)
 
     if include_docstring:
         docstring: list[TokenInfo] = []
@@ -198,6 +210,7 @@ def filter_definitions(
     definitions: Iterator[list[TokenInfo]],
     def_type: DefType = DefType.PUBLIC,
 ) -> Iterator[list[TokenInfo]]:
+    """Filter definitions based on their definition type."""
     for defn in definitions:
         _, name_tok, *_ = defn
         if (
@@ -209,6 +222,7 @@ def filter_definitions(
 
 
 def unparse_tokens(tokens: Sequence[TokenInfo]) -> str:
+    """Convert a sequence of tokens back into the original source lines of code."""
     _tokens = iter(tokens)
     tok = next(_tokens)
     lines, prev_line = [tok.line], tok.end[0]
