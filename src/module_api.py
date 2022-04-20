@@ -4,6 +4,7 @@ import argparse
 import io
 import token
 from enum import Enum
+from itertools import chain
 from tokenize import generate_tokens
 from tokenize import TokenInfo
 from tokenize import untokenize
@@ -149,18 +150,19 @@ def find_definitions(
     f = io.StringIO(source_s)
     gen = generate_tokens(f.readline)
     for tok in gen:
-        if tok.type == token.NAME and tok.string in ("class", "def"):
-            yield _read_signature(gen, tok, include_docstring=include_docstring)
+        if tok.type != token.NAME or tok.string not in ("class", "def"):
+            continue
+        definition = read_signature(chain([tok], gen))
+        if include_docstring:
+            docstring = read_docstring(gen)
+            definition.extend(docstring)
+        yield definition
 
 
-def _read_signature(
-    gen: Iterator[TokenInfo],
-    tok: TokenInfo,
-    *,
-    include_docstring: bool = True,
-) -> list[TokenInfo]:
+def read_signature(gen: Iterator[TokenInfo]) -> list[TokenInfo]:
     """Find all tokens inolved in a signature definition."""
     # read until next colon outside parentheses
+    tok = next(gen)
     signature: list[TokenInfo] = []
     parens = 0
     while tok.exact_type != token.COLON or parens > 0:
@@ -173,19 +175,23 @@ def _read_signature(
 
     signature.append(tok)  # colon
 
-    if include_docstring:
-        docstring: list[TokenInfo] = []
-        tok = next(gen)
-        while tok.exact_type in (token.NEWLINE, token.INDENT, token.STRING):
-            docstring.append(tok)
-            tok = next(gen)
-
-        # extend if there is a string among the whitespace
-        # immediately following the signature
-        if any(t.exact_type == token.STRING for t in docstring):
-            signature.extend(docstring)
-
     return signature
+
+
+def read_docstring(gen: Iterator[TokenInfo]) -> list[TokenInfo]:
+    docstring: list[TokenInfo] = []
+    tok = next(gen)
+    while tok.exact_type in (token.NEWLINE, token.INDENT, token.STRING):
+        print(tok)
+        docstring.append(tok)
+        tok = next(gen)
+
+    # extend if there is a string among the whitespace
+    # immediately following the signature
+    if any(t.exact_type == token.STRING for t in docstring):
+        return docstring
+    else:
+        return []
 
 
 def filter_definitions(
