@@ -6,6 +6,8 @@ import token
 from enum import Enum
 from tokenize import generate_tokens
 from tokenize import TokenInfo
+from tokenize import untokenize
+from typing import Iterable
 from typing import Iterator
 from typing import NoReturn
 from typing import Sequence
@@ -133,9 +135,9 @@ def module_api(
     include_docstring: bool = True,
 ) -> list[str]:
     """Extract API definition strings from a source code string."""
-    def_it = find_definitions(source_s, include_docstring=include_docstring)
-    def_lst = [unparse_tokens(d) for d in filter_definitions(def_it, def_type=def_type)]
-    return [d.strip() for d in def_lst]
+    defs = find_definitions(source_s, include_docstring=include_docstring)
+    filtered_defs = filter_definitions(defs, def_type=def_type)
+    return [untokenize(d).lstrip("\\\n") for d in filtered_defs]
 
 
 def find_definitions(
@@ -191,6 +193,8 @@ def _read_signature(
             parens -= 1
         tok = next(gen)
 
+    signature.append(tok)  # colon
+
     if include_docstring:
         docstring: list[TokenInfo] = []
         tok = next(gen)
@@ -212,7 +216,7 @@ def filter_definitions(
 ) -> Iterator[list[TokenInfo]]:
     """Filter definitions based on their definition type."""
     for defn in definitions:
-        _, name_tok, *_ = defn
+        name_tok = _find_signature_name(defn)
         if (
             def_type == DefType.ALL
             or (def_type == DefType.PUBLIC and not name_tok.string.startswith("_"))
@@ -221,17 +225,15 @@ def filter_definitions(
             yield defn
 
 
-def unparse_tokens(tokens: Sequence[TokenInfo]) -> str:
-    """Convert a sequence of tokens back into the original source lines of code."""
+def _find_signature_name(tokens: Iterable[TokenInfo]) -> TokenInfo:
     _tokens = iter(tokens)
-    tok = next(_tokens)
-    lines, prev_line = [tok.line], tok.end[0]
     for tok in _tokens:
-        if tok.end[0] == prev_line:
-            continue
-        lines.append(tok.line)
-        prev_line = tok.end[0]
-    return "".join(lines)
+        if tok.exact_type == token.NAME and tok.string in ("def", "class"):
+            break
+    else:
+        raise ValueError("Unable to find signature name in token stream")
+
+    return next(_tokens)
 
 
 if __name__ == "__main__":
