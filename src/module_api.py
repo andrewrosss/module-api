@@ -137,7 +137,7 @@ def module_api(
     """Extract API definition strings from a source code string."""
     defs = find_definitions(source_s, include_docstring=include_docstring)
     filtered_defs = filter_definitions(defs, def_type=def_type)
-    return [untokenize(d).lstrip("\\\n") for d in filtered_defs]
+    return [untokenize(d).lstrip("\\\n").rstrip() for d in filtered_defs]
 
 
 def find_definitions(
