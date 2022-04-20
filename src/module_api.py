@@ -149,30 +149,8 @@ def find_definitions(
     f = io.StringIO(source_s)
     gen = generate_tokens(f.readline)
     for tok in gen:
-        if tok.type == token.NAME and tok.string == "def":
-            yield _read_function(gen, tok, include_docstring=include_docstring)
-        elif tok.type == token.NAME and tok.string == "class":
-            yield _read_class(gen, tok, include_docstring=include_docstring)
-
-
-def _read_function(
-    gen: Iterator[TokenInfo],
-    tok: TokenInfo,
-    *,
-    include_docstring: bool = True,
-) -> list[TokenInfo]:
-    """Find tokens involved in a function definition."""
-    return _read_signature(gen, tok, include_docstring=include_docstring)
-
-
-def _read_class(
-    gen: Iterator[TokenInfo],
-    tok: TokenInfo,
-    *,
-    include_docstring: bool = True,
-) -> list[TokenInfo]:
-    """Find tokens involved in a class definition."""
-    return _read_signature(gen, tok, include_docstring=include_docstring)
+        if tok.type == token.NAME and tok.string in ("class", "def"):
+            yield _read_signature(gen, tok, include_docstring=include_docstring)
 
 
 def _read_signature(
